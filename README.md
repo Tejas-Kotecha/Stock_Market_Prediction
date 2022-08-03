@@ -2,7 +2,9 @@
 
 
 #Run this for installing necessary package
-pip install -r requirements
+
+**pip install -r requirements**
 
 #Run the program
-streamlit run main.py
+
+**streamlit run main.py**
