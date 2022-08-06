@@ -20,8 +20,17 @@ TODAY = date.today().strftime("%Y-%m-%d")
 
 st.title("Stock Prediction App")
 
-stocks = ("AMD","AMZN","SPY","GOOG","MSFT","GME","TSLA","HDFCBANK.NS")
-selected_stock = st.selectbox("Select dataset for prediction",stocks)
+tickers = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+stockdownload = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+stocks_list = tickers.Symbol.to_list()
+company_list = stockdownload.Security.to_list()
+
+mixdict = dict(zip(tickers.Symbol, stockdownload.Security))
+
+res = [i+ " -- " + j for i, j in zip(stocks_list, company_list)]
+#stocks = ("AMD","AMZN","SPY","GOOG","MSFT","GME","TSLA","HDFCBANK.NS")
+spl = st.selectbox("Select dataset for prediction",res).split(" -- ")
+selected_stock = spl[0]
 
 n_years = st.slider("Months of prediction:", 2, 5)
 period = n_years * 365
