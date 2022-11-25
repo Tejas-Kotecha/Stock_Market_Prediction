@@ -12,127 +12,83 @@ from urllib.request import urlopen, Request
 from bs4 import BeautifulSoup
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 import pandas as pd
-import matplotlib.pyplot as plt
 
-START = "2015-01-01"
-#TODAY = "2016-01-01"
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+import numpy as np
+
+from analysis import *;
+
+st.set_page_config(layout="wide")
+
+
+START = "2012-01-01"
 TODAY = date.today().strftime("%Y-%m-%d")
 
 st.title("Stock Prediction App")
+st.text('This is a web app which allows you to predict stock movements and to give analysis of sentiment of stocks')
 
-tickers = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
-stockdownload = pd.read_html('https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+
+# Sidebar setup
+st.sidebar.title('Sidebar')
+tickers = pd.read_html(
+    'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
+stockdownload = pd.read_html(
+    'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')[0]
 stocks_list = tickers.Symbol.to_list()
-company_list = stockdownload.Security.to_list()
+company_list = tickers.Security.to_list()
 
-mixdict = dict(zip(tickers.Symbol, stockdownload.Security))
-
-res = [i+ " -- " + j for i, j in zip(stocks_list, company_list)]
-#stocks = ("AMD","AMZN","SPY","GOOG","MSFT","GME","TSLA","HDFCBANK.NS")
-spl = st.selectbox("Select dataset for prediction",res).split(" -- ")
+res = [i + " -- " + j for i, j in zip(stocks_list, company_list)]
+spl = st.sidebar.selectbox("Select dataset for prediction", res).split(" -- ")
 selected_stock = spl[0]
 
-n_years = st.slider("Months of prediction:", 2, 5)
+n_years = st.sidebar.slider("Years of prediction:", 1, 5)
 period = n_years * 365
 
-@st.cache
-def load_data(ticker):
-    data = yf.download(ticker, START, TODAY) #will return data in pandas data frame
-    data.reset_index(inplace=True)
-    return data
-
 data_load_state = st.text("Load data...")
-data = load_data(selected_stock)
-data_load_state.text("Loading data...done!")
+data = load_data(START, TODAY, selected_stock)
+data_load_state.text("Data Load Success")
+s_df = fetchNews(selected_stock)
 
-# st.subheader('Raw data')
-# st.write(data.tail())
+# if st.sidebar.button('Load Data'):
+#   data_load_state = st.text("Load data...")
+#   data = load_data(START, TODAY, selected_stock)
+#   data_load_state.text("Data Load Success")
+#   s_df = fetchNews(selected_stock)
 
-def plot_raw_data():
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data['Date'],y=data['Open'], name='stock_open'))
-    fig.add_trace(go.Scatter(x=data['Date'],y=data['Close'], name='stock_close'))
-    fig.layout.update(title_text="Time Series Data", xaxis_rangeslider_visible=True)
-    st.plotly_chart(fig)
+#Sidebar navigation
+st.sidebar.title('Navigation')
+options = st.sidebar.radio('Select what you want to display:', [
+  'Home',
+  'Scout Raw Data',
+  'Visualise Raw Data',
+  'Scout Future Movement Data',
+  'Visualise Future Movement Data',
+  'Fetch News of stock',
+  'Analyze sentiment of stock',
+  'Recommended Action for the stock',
+])
 
-plot_raw_data()
-
-#Forecasting with prophet
-df_train = data[['Date','Close']]
-df_train = df_train.rename(columns={"Date": "ds", "Close":"y"})
-
-m = Prophet() #changepoint_range=1,weekly_seasonality=True, changepoint_prior_scale=0.10)
-m.fit(df_train)
-future = m.make_future_dataframe(periods=period)
-forecast = m.predict(future)
-
-st.subheader('Forecast data')
-st.write(forecast.tail())
-
-st.write('forecast data')
-fig1 = plot_plotly(m, forecast)
-st.plotly_chart(fig1)
-
-#-------------------------------------ANALYSIS PURPOSE----------------------------------------------------
-# TODAY = "2018-04-01"
-# data = yf.download(selected_stock, START, TODAY) #will return data in pandas data frame
-# data.reset_index(inplace=True)
-# fig = go.Figure()
-# fig.add_trace(go.Scatter(x=data['Date'],y=data['Close'], name='original'))
-# fig.add_trace(go.Scatter(x=forecast['ds'],y=(forecast['yhat_upper']+forecast['yhat_lower'])/2, name='predicted'))
-# fig.layout.update(title_text="Time Series Data", xaxis_rangeslider_visible=True)
-# st.plotly_chart(fig)
-
-# st.write('forecast components')
-# fig2 = m.plot_components(forecast)
-# st.write(fig2)
-
-#--------------------------------Testing------------------------------
-#st.write(forecast.tail())
-
-
-#----------------------------------------------TREND-------------------------------------------
-finviz_url = 'https://finviz.com/quote.ashx?t='
-
-url = finviz_url + selected_stock
-
-req = Request(url=url, headers={'user-agent': 'stock-p'})
-response = urlopen(req)
-
-html = BeautifulSoup(response,'html')
-news_table = html.find(id='news-table')
-
-#print(news_table)
-
-rows = news_table.findAll('tr')
-
-parsed_data = []
-
-for index, row in enumerate(rows):
-  title = row.a.get_text()
-  date_data = row.td.text.split(' ')
-
-  if len(date_data) == 1:
-    time = date_data[0]
-  else:
-    date = date_data[0]
-    time = date_data[1]
-
-  parsed_data.append([date, time, title])
-  
-s_df = pd.DataFrame(parsed_data,columns=['date','time','title'])
-
-vader = SentimentIntensityAnalyzer()
-
-f = lambda title: vader.polarity_scores(title)['compound']
-s_df['compound'] = s_df['title'].apply(f)
-#s_df['date'] = pd.to_datetime(s_df.date).dt.date
-
-#plt.figure(figsize=(10,8))
-
-mean_df = s_df.groupby(['date']).mean()
-# mean_df = mean_df.unstack()
-# mean_df = mean_df.xs('compound', axis="columns").transpose()
-# mean_df.plot(kind='bar')
-st.bar_chart(mean_df, use_container_width=True)
-st.write(mean_df)
+# Navigation options
+if options == 'Home':
+  home()
+elif options == 'Scout Raw Data':
+  printRawData(data)
+elif options == 'Visualise Raw Data':
+  plot_raw_data(data)
+elif options == 'Scout Future Movement Data':
+  st.subheader('Forecast data')
+  forecast = futureMovementData(data, period)
+  st.write(forecast)
+elif options == 'Visualise Future Movement Data':
+  futureMovementVisualisation(data, period)
+elif options == 'Fetch News of stock':
+  st.write("News from famous publications")
+  st.write(s_df)
+elif options == 'Analyze sentiment of stock':
+  mean_df = sentimentAnalysis(s_df)
+  st.bar_chart(mean_df, use_container_width=True)
+  st.write(mean_df)
+elif options == 'Recommended Action for the stock':
+  recommendedAction(data, s_df, period)
+# elif options == 'All in one Analysis':
+#   allInOneAnalysis(data, period, s_df)
